@@ -1,0 +1,27 @@
+# permissions for end users to view portbridgeservices.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: portbridgeservice-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: port-bridge
+    app.kubernetes.io/part-of: port-bridge
+    app.kubernetes.io/managed-by: kustomize
+  name: portbridgeservice-viewer-role
+rules:
+- apiGroups:
+  - crds.anayak.com.np
+  resources:
+  - portbridgeservices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - crds.anayak.com.np
+  resources:
+  - portbridgeservices/status
+  verbs:
+  - get

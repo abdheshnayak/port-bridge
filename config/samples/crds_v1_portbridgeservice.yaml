@@ -1,0 +1,12 @@
+apiVersion: crds.anayak.com.np/v1
+kind: PortBridgeService
+metadata:
+  labels:
+    app.kubernetes.io/name: portbridgeservice
+    app.kubernetes.io/instance: portbridgeservice-sample
+    app.kubernetes.io/part-of: port-bridge
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: port-bridge
+  name: portbridgeservice-sample
+spec:
+  # TODO(user): Add fields here

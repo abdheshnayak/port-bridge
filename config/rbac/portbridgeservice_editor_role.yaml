@@ -1,0 +1,31 @@
+# permissions for end users to edit portbridgeservices.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: portbridgeservice-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: port-bridge
+    app.kubernetes.io/part-of: port-bridge
+    app.kubernetes.io/managed-by: kustomize
+  name: portbridgeservice-editor-role
+rules:
+- apiGroups:
+  - crds.anayak.com.np
+  resources:
+  - portbridgeservices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crds.anayak.com.np
+  resources:
+  - portbridgeservices/status
+  verbs:
+  - get
