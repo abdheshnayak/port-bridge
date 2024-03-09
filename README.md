@@ -10,42 +10,84 @@ Port-Bridge simplifies Kubernetes service exposure by providing a unified soluti
 - **Customizable Traffic Distribution:** Easily configure rules for traffic distribution among services.
 - **High Availability:** Ensures high availability of services with intelligent health checks and failover mechanisms.
 
+
 ### Running on the cluster
-1. Install Instances of Custom Resources Definitions (CRDs) into the cluster:
+1. Install Instances of Custom Resources:
 
 ```sh
-kubectl apply -f config/crd/bases/
+kubectl apply -f config/samples/
 ```
-or
+
+2. Build and push your image to the location specified by `IMG`:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/abdheshnayak/port-bridge/main/config/crd/bases/crds.anayak.com.np_portbridgeservices.yaml
+make docker-build docker-push IMG=<some-registry>/port-bridge:tag
 ```
 
-2. Create a PortBridgeService Custom Resource (CR) to expose a service:
-    
-```yaml
-apiVersion: crds.anayak.com.np/v1
-kind: PortBridgeService
-metadata:
-  name: portbridgeservice-sample
-spec:
-  namespaces:
-    - default
-  replicas: 1
+3. Deploy the controller to the cluster with the image specified by `IMG`:
+
+```sh
+make deploy IMG=<some-registry>/port-bridge:tag
 ```
 
-> **NOTE:** The `namespaces` field specifies the namespaces where the services are located. The `replicas` field specifies the number of replicas for the load balancer.
+### Uninstall CRDs
+To delete the CRDs from the cluster:
 
-3. Add the following label to the service you want to expose:
-
-```yaml
-metadata:
-  labels:
-    anayak.com.np/port-bridge-service: "true"
+```sh
+make uninstall
 ```
 
-> **NOTE:** The `anayak.com.np/port-bridge-service` label is used to identify the services that need to be exposed through the Port-Bridge.
+### Undeploy controller
+UnDeploy the controller from the cluster:
 
+```sh
+make undeploy
+```
 
-More information about the code structure and commands can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+### How it works
+This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
+
+It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
+which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
+
+### Test It Out
+1. Install the CRDs into the cluster:
+
+```sh
+make install
+```
+
+2. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
+
+```sh
+make run
+```
+
+**NOTE:** You can also run this in one step by running: `make install run`
+
+### Modifying the API definitions
+If you are editing the API definitions, generate the manifests such as CRs or CRDs using:
+
+```sh
+make manifests
+```
+
+**NOTE:** Run `make --help` for more information on all potential `make` targets
+
+More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+
+## License
+
+Copyright 2024.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
