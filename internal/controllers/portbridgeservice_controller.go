@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strconv"
 
 	crdsv1 "github.com/abdheshnayak/port-bridge/api/v1"
 	"github.com/abdheshnayak/port-bridge/internal/controllers/env"
@@ -95,7 +94,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	return ctrl.Result{}, nil
 }
 
-func (r *Reconciler) createOrRollOutDeployment(req *rApi.Request[*crdsv1.PortBridgeService]) error {
+func (r *Reconciler) createOrRollOutDeployment(req *rApi.Request[*crdsv1.PortBridgeService], nodeports map[int32]metaData) error {
 	ctx, obj := req.Context(), req.Object
 	d, err := rApi.Get(ctx, r.Client, fn.NN(fmt.Sprintf("%s-deployment", obj.GetName()), "default"), &appsv1.Deployment{})
 	if err != nil {
@@ -113,7 +112,7 @@ func (r *Reconciler) createOrRollOutDeployment(req *rApi.Request[*crdsv1.PortBri
 		}
 	}
 
-	deployment := getDeployment(req)
+	deployment := getDeployment(req, nodeports)
 	if err := fn.KubectlApply(ctx, r.Client, deployment); err != nil {
 		return err
 	}
@@ -132,9 +131,6 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 
 	var services corev1.ServiceList
 	if err := r.List(ctx, &services, &client.ListOptions{
-		// FieldSelector: client.MatchingFieldsSelector{
-		// 	// Selector: apiFields.OneTermEqualSelector("spec.type", "NodePort"),
-		// },
 		LabelSelector: apiLabels.SelectorFromValidatedSet(map[string]string{
 			SvcMarkKey: "true",
 		}),
@@ -142,27 +138,27 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 		r.logger.Error(err)
 	}
 
-	type metaData struct {
-		Name      string          `json:"name"`
-		Protocol  corev1.Protocol `json:"protocol"`
-		Namespace string          `json:"namespace"`
-	}
-
-	nodeports := map[string]metaData{}
+	nodeports := map[int32]metaData{}
 
 	for _, svc := range services.Items {
 		if !slices.Contains(obj.Spec.Namespaces, svc.GetNamespace()) || svc.Spec.Type != corev1.ServiceTypeNodePort {
 			continue
 		}
 
-		fmt.Println("********************", svc.Name)
-
 		for _, port := range svc.Spec.Ports {
+			ip := ""
+
+			if len(svc.Spec.ClusterIPs) > 0 {
+				ip = svc.Spec.ClusterIPs[0]
+			}
+
 			if port.NodePort != 0 {
-				nodeports[fmt.Sprint(port.NodePort)] = metaData{
+				nodeports[port.NodePort] = metaData{
 					Name:      svc.GetName(),
 					Protocol:  port.Protocol,
 					Namespace: svc.GetNamespace(),
+					Ip:        ip,
+					Port:      port.Port,
 				}
 			}
 		}
@@ -173,21 +169,36 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 	}
 
 	needsToUpdate := func() bool {
-		cm, err := rApi.Get(ctx, r.Client, fn.NN("port-bridge-config", "default"), &corev1.ConfigMap{})
+		cm, err := rApi.Get(ctx, r.Client, fn.NN("default", fmt.Sprintf("%s-config", obj.GetName())), &corev1.ConfigMap{})
 		if err != nil {
+			r.logger.Error(err)
 			return true
 		}
 
 		oldNodeportsString := cm.Data["nodeports"]
 
-		oldNodeports := map[string]metaData{}
+		oldNodeports := map[int32]metaData{}
 
 		if err := json.Unmarshal([]byte(oldNodeportsString), &oldNodeports); err != nil {
 			return true
 		}
 
 		if equal := maps.Equal(nodeports, oldNodeports); !equal {
+			fmt.Println("Nodeports are not equal")
 			return true
+		}
+
+		// if the service or deployment is not found, we need to update
+		if _, err := rApi.Get(ctx, r.Client, fn.NN("default", fmt.Sprintf("%s-svc", obj.GetName())), &corev1.Service{}); err != nil {
+			if apiErrors.IsNotFound(err) {
+				return true
+			}
+		}
+
+		if _, err := rApi.Get(ctx, r.Client, fn.NN("default", fmt.Sprintf("%s-deployment", obj.GetName())), &appsv1.Deployment{}); err != nil {
+			if apiErrors.IsNotFound(err) {
+				return true
+			}
 		}
 
 		return false
@@ -208,6 +219,10 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 				Name:      fmt.Sprintf("%s-config", obj.GetName()),
 				Namespace: "default",
 				Labels: map[string]string{
+					SvcMarkKey: "true",
+					SvcNameKey: obj.GetName(),
+				},
+				Annotations: map[string]string{
 					SvcMarkKey: "true",
 					SvcNameKey: obj.GetName(),
 				},
@@ -232,6 +247,10 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("%s-svc", obj.GetName()),
 				Namespace: "default",
+				Labels: map[string]string{
+					SvcMarkKey: "true",
+					SvcNameKey: obj.GetName(),
+				},
 				Annotations: map[string]string{
 					SvcMarkKey: "true",
 					SvcNameKey: obj.GetName(),
@@ -248,11 +267,10 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 				Ports: func() []corev1.ServicePort {
 					ports := []corev1.ServicePort{}
 					for nodeport, svcName := range nodeports {
-						np, _ := strconv.Atoi(nodeport)
 						ports = append(ports, corev1.ServicePort{
-							Name:     fmt.Sprintf("%s-%s", svcName.Name, nodeport),
+							Name:     fmt.Sprintf("%s-%d", svcName.Name, nodeport),
 							Protocol: svcName.Protocol,
-							Port:     int32(np),
+							Port:     nodeport,
 						})
 					}
 					return ports
@@ -266,7 +284,7 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 	}
 
 	if needsToUpdate {
-		if err := r.createOrRollOutDeployment(req); err != nil {
+		if err := r.createOrRollOutDeployment(req, nodeports); err != nil {
 			return failed(err)
 		}
 	}
@@ -297,31 +315,38 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, logger logging.Logger) e
 
 	builder.For(&crdsv1.PortBridgeService{})
 
-	builder.Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
+	watchlist := []client.Object{
+		&corev1.Service{},
+		&corev1.ConfigMap{},
+		&appsv1.Deployment{},
+	}
 
-		result := []reconcile.Request{}
-		if o.GetAnnotations()[SvcMarkKey] != "true" {
-			return result
-		}
+	for _, obj := range watchlist {
+		builder.Watches(obj, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
 
-		pbsList := &crdsv1.PortBridgeServiceList{}
-		if err := r.List(ctx, pbsList); err != nil {
-			return nil
-		}
-
-		for _, pbs := range pbsList.Items {
-
-			if slices.Contains(pbs.Spec.Namespaces, o.GetNamespace()) {
-				result = append(result, reconcile.Request{
-					NamespacedName: client.ObjectKey{
-						Name: pbs.GetName(),
-					},
-				})
+			result := []reconcile.Request{}
+			if o.GetAnnotations()[SvcMarkKey] != "true" {
+				return result
 			}
-		}
 
-		return result
-	}))
+			pbsList := &crdsv1.PortBridgeServiceList{}
+			if err := r.List(ctx, pbsList); err != nil {
+				return nil
+			}
+
+			for _, pbs := range pbsList.Items {
+				if slices.Contains(pbs.Spec.Namespaces, o.GetNamespace()) || o.GetNamespace() == "default" {
+					result = append(result, reconcile.Request{
+						NamespacedName: client.ObjectKey{
+							Name: pbs.GetName(),
+						},
+					})
+				}
+			}
+
+			return result
+		}))
+	}
 
 	return builder.Complete(r)
 }

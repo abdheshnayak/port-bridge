@@ -38,6 +38,9 @@ spec:
                 items:
                   type: string
                 type: array
+              replicas:
+                format: int32
+                type: integer
             required:
             - namespaces
             type: object

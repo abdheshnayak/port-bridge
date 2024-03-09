@@ -8,6 +8,7 @@ import (
 
 type PortBridgeServiceSpec struct {
 	Namespaces []string `json:"namespaces"`
+	Replicas   *int32   `json:"replicas,omitempty"`
 }
 
 type PortBridgeServiceStatus struct {
