@@ -3,6 +3,7 @@ module github.com/abdheshnayak/port-bridge
 go 1.21.1
 
 require (
+	github.com/codingconcepts/env v0.0.0-20200821220118-a8fbf8d84482
 	github.com/kloudlite/operator v1.0.3
 	github.com/onsi/ginkgo/v2 v2.12.0
 	github.com/onsi/gomega v1.27.10

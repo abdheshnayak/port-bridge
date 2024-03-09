@@ -14,7 +14,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	crdsv1 "github.com/abdheshnayak/port-bridge/api/v1"
-	"github.com/abdheshnayak/port-bridge/controllers"
+	"github.com/abdheshnayak/port-bridge/internal/controllers"
+	"github.com/abdheshnayak/port-bridge/internal/controllers/env"
+	"github.com/kloudlite/operator/pkg/logging"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -49,8 +51,6 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "191e713d.anayak.com.np",
@@ -60,10 +60,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.PortBridgeServiceReconciler{
+	dev := flag.Bool("dev", false, "enable development mode")
+	if dev != nil {
+		d := false
+		dev = &d
+	}
+
+	logger := logging.NewOrDie(&logging.Options{
+		Name:        "port-bridge-service",
+		Dev:         *dev,
+		CallerTrace: true,
+	})
+
+	if err = (&controllers.Reconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+		Name:   "PortBridgeService",
+		Env:    env.GetEnvOrDie(),
+	}).SetupWithManager(mgr, logger); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PortBridgeService")
 		os.Exit(1)
 	}

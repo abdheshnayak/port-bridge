@@ -1,0 +1,33 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - crds.anayak.com.np
+  resources:
+  - portbridgeservices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crds.anayak.com.np
+  resources:
+  - portbridgeservices/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - crds.anayak.com.np
+  resources:
+  - portbridgeservices/status
+  verbs:
+  - get
+  - patch
+  - update

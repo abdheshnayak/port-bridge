@@ -8,27 +8,25 @@ import (
 	"slices"
 	"strconv"
 
+	crdsv1 "github.com/abdheshnayak/port-bridge/api/v1"
+	"github.com/abdheshnayak/port-bridge/internal/controllers/env"
 	"github.com/kloudlite/operator/pkg/constants"
 	fn "github.com/kloudlite/operator/pkg/functions"
 	"github.com/kloudlite/operator/pkg/kubectl"
 	"github.com/kloudlite/operator/pkg/logging"
 	rApi "github.com/kloudlite/operator/pkg/operator"
-
+	stepResult "github.com/kloudlite/operator/pkg/operator/step-result"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	apiFields "k8s.io/apimachinery/pkg/fields"
+	// apiFields "k8s.io/apimachinery/pkg/fields"
 	apiLabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	crdsv1 "github.com/abdheshnayak/port-bridge/api/v1"
-	"github.com/abdheshnayak/port-bridge/controllers/internal/env"
-	stepResult "github.com/kloudlite/operator/pkg/operator/step-result"
-	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -95,7 +93,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 
 	req.Object.Status.IsReady = true
 	return ctrl.Result{}, nil
-
 }
 
 func (r *Reconciler) createOrRollOutDeployment(req *rApi.Request[*crdsv1.PortBridgeService]) error {
@@ -135,16 +132,14 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 
 	var services corev1.ServiceList
 	if err := r.List(ctx, &services, &client.ListOptions{
-		FieldSelector: client.MatchingFieldsSelector{
-			Selector: apiFields.OneTermEqualSelector("spec.type", "NodePort"),
-		},
+		// FieldSelector: client.MatchingFieldsSelector{
+		// 	// Selector: apiFields.OneTermEqualSelector("spec.type", "NodePort"),
+		// },
 		LabelSelector: apiLabels.SelectorFromValidatedSet(map[string]string{
 			SvcMarkKey: "true",
 		}),
 	}); err != nil {
-		if !apiErrors.IsNotFound(err) {
-			return failed(err)
-		}
+		r.logger.Error(err)
 	}
 
 	type metaData struct {
@@ -156,9 +151,11 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 	nodeports := map[string]metaData{}
 
 	for _, svc := range services.Items {
-		if !slices.Contains(obj.Spec.Namespaces, svc.GetNamespace()) {
+		if !slices.Contains(obj.Spec.Namespaces, svc.GetNamespace()) || svc.Spec.Type != corev1.ServiceTypeNodePort {
 			continue
 		}
+
+		fmt.Println("********************", svc.Name)
 
 		for _, port := range svc.Spec.Ports {
 			if port.NodePort != 0 {
@@ -203,6 +200,10 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 		}
 
 		cm := &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "ConfigMap",
+			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("%s-config", obj.GetName()),
 				Namespace: "default",
@@ -224,6 +225,10 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 
 	if needsToUpdate {
 		svc := &corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "Service",
+			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("%s-svc", obj.GetName()),
 				Namespace: "default",
@@ -239,13 +244,13 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 					SvcNameKey: obj.GetName(),
 				},
 				// Type: corev1.ServiceTypeLoadBalancer,
-				Type: corev1.ClusterIPNone,
+				// Type: corev1.ClusterIPNone,
 				Ports: func() []corev1.ServicePort {
 					ports := []corev1.ServicePort{}
 					for nodeport, svcName := range nodeports {
 						np, _ := strconv.Atoi(nodeport)
 						ports = append(ports, corev1.ServicePort{
-							Name:     fmt.Sprintf("%s:%s", svcName.Name, nodeport),
+							Name:     fmt.Sprintf("%s-%s", svcName.Name, nodeport),
 							Protocol: svcName.Protocol,
 							Port:     int32(np),
 						})
@@ -282,7 +287,12 @@ func (r *Reconciler) finalize(req *rApi.Request[*crdsv1.PortBridgeService]) step
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, logger logging.Logger) error {
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
+	r.logger = logger.WithName(r.Name)
+	r.yamlClient = kubectl.NewYAMLClientOrDie(mgr.GetConfig(), kubectl.YAMLClientOpts{Logger: r.logger})
+
 	builder := ctrl.NewControllerManagedBy(mgr)
 
 	builder.For(&crdsv1.PortBridgeService{})
@@ -290,7 +300,6 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	builder.Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
 
 		result := []reconcile.Request{}
-
 		if o.GetAnnotations()[SvcMarkKey] != "true" {
 			return result
 		}

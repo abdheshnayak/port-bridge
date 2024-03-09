@@ -21,6 +21,10 @@ func getDeployment(req *rApi.Request[*crdsv1.PortBridgeService]) *appsv1.Deploym
 	labels := map[string]string{SvcMarkKey: "true", SvcNameKey: name}
 
 	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            fmt.Sprintf("%s-deployment", name),
 			Namespace:       "default",
