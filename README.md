@@ -2,6 +2,8 @@
 
 Port-Bridge simplifies Kubernetes service exposure by providing a unified solution to manage node ports and external traffic through a single load balancer. This operator automates the process of creating, updating, and managing network traffic distribution to Kubernetes services, reducing the complexity and cost associated with maintaining multiple load balancers.
 
+![Port-Bridge](./architecture.png)
+
 ## Features
 
 - **Unified Load Balancer Management:** Centralize the management of external traffic through a single load balancer for multiple services.
