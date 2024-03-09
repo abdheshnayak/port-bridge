@@ -94,32 +94,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	return ctrl.Result{}, nil
 }
 
-func (r *Reconciler) createOrRollOutDeployment(req *rApi.Request[*crdsv1.PortBridgeService], nodeports map[int32]metaData) error {
-	ctx, obj := req.Context(), req.Object
-	d, err := rApi.Get(ctx, r.Client, fn.NN(fmt.Sprintf("%s-deployment", obj.GetName()), "default"), &appsv1.Deployment{})
-	if err != nil {
-		if !apiErrors.IsNotFound(err) {
-			return err
-		}
-	}
-
-	if d != nil {
-		if err := fn.RolloutRestart(r.Client, fn.Deployment, "default", map[string]string{
-			SvcMarkKey: "true",
-			SvcNameKey: obj.GetName(),
-		}); err != nil {
-			return err
-		}
-	}
-
-	deployment := getDeployment(req, nodeports)
-	if err := fn.KubectlApply(ctx, r.Client, deployment); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBridgeService]) stepResult.Result {
 	ctx, obj := req.Context(), req.Object
 
@@ -283,7 +257,8 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 	}
 
 	if needsToUpdate {
-		if err := r.createOrRollOutDeployment(req, nodeports); err != nil {
+		deployment := getDeployment(req, nodeports)
+		if err := fn.KubectlApply(ctx, r.Client, deployment); err != nil {
 			return failed(err)
 		}
 	}
