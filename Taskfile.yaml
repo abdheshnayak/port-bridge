@@ -1,0 +1,16 @@
+version: 3
+
+tasks:
+  run:
+    cmds:
+      - make install run
+  build:
+    preconditions:
+      - sh: '[[ -n "{{.Version}}" ]]'
+        msg: "var Version is required"
+    silent: true
+    interactive: true
+    env:
+      IMAGE: ghcr.io/abdheshnayak/port-bridge:{{.Version}}
+    cmds:
+      - make docker-build docker-push IMG=${IMAGE}

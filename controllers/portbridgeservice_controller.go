@@ -8,7 +8,7 @@ import (
 	"slices"
 
 	crdsv1 "github.com/abdheshnayak/port-bridge/api/v1"
-	"github.com/abdheshnayak/port-bridge/internal/controllers/env"
+	"github.com/abdheshnayak/port-bridge/controllers/env"
 	"github.com/kloudlite/operator/pkg/constants"
 	fn "github.com/kloudlite/operator/pkg/functions"
 	"github.com/kloudlite/operator/pkg/kubectl"
@@ -262,8 +262,7 @@ func (r *Reconciler) reconNodeportConfigAndSvc(req *rApi.Request[*crdsv1.PortBri
 					SvcMarkKey: "true",
 					SvcNameKey: obj.GetName(),
 				},
-				// Type: corev1.ServiceTypeLoadBalancer,
-				// Type: corev1.ClusterIPNone,
+				Type: corev1.ServiceTypeLoadBalancer,
 				Ports: func() []corev1.ServicePort {
 					ports := []corev1.ServicePort{}
 					for nodeport, svcName := range nodeports {

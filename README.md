@@ -1,76 +1,51 @@
-# port-bridge
-// TODO(user): Add simple overview of use/purpose
+# Port-Bridge
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+Port-Bridge simplifies Kubernetes service exposure by providing a unified solution to manage node ports and external traffic through a single load balancer. This operator automates the process of creating, updating, and managing network traffic distribution to Kubernetes services, reducing the complexity and cost associated with maintaining multiple load balancers.
 
-## Getting Started
-You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
-**Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
+## Features
+
+- **Unified Load Balancer Management:** Centralize the management of external traffic through a single load balancer for multiple services.
+- **Dynamic Service Discovery:** Automatically detects and configures new services that require external exposure.
+- **Cost Efficiency:** Reduce the costs associated with provisioning and maintaining multiple load balancers.
+- **Customizable Traffic Distribution:** Easily configure rules for traffic distribution among services.
+- **High Availability:** Ensures high availability of services with intelligent health checks and failover mechanisms.
 
 ### Running on the cluster
-1. Install Instances of Custom Resources:
+1. Install Instances of Custom Resources Definitions (CRDs) into the cluster:
 
 ```sh
-kubectl apply -f config/samples/
+kubectl apply -f config/crd/bases/
 ```
-
-2. Build and push your image to the location specified by `IMG`:
+or
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/port-bridge:tag
+kubectl apply -f https://raw.githubusercontent.com/abdheshnayak/port-bridge/main/config/crd/bases/crds.anayak.com.np_portbridgeservices.yaml
 ```
 
-3. Deploy the controller to the cluster with the image specified by `IMG`:
-
-```sh
-make deploy IMG=<some-registry>/port-bridge:tag
+2. Create a PortBridgeService Custom Resource (CR) to expose a service:
+    
+```yaml
+apiVersion: crds.anayak.com.np/v1
+kind: PortBridgeService
+metadata:
+  name: portbridgeservice-sample
+spec:
+  namespaces:
+    - default
+  replicas: 1
 ```
 
-### Uninstall CRDs
-To delete the CRDs from the cluster:
+> **NOTE:** The `namespaces` field specifies the namespaces where the services are located. The `replicas` field specifies the number of replicas for the load balancer.
 
-```sh
-make uninstall
+3. Add the following label to the service you want to expose:
+
+```yaml
+metadata:
+  labels:
+    anayak.com.np/port-bridge-service: "true"
 ```
 
-### Undeploy controller
-UnDeploy the controller from the cluster:
-
-```sh
-make undeploy
-```
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-### How it works
-This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
-
-It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
-which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
-
-### Test It Out
-1. Install the CRDs into the cluster:
-
-```sh
-make install
-```
-
-2. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
-
-```sh
-make run
-```
-
-**NOTE:** You can also run this in one step by running: `make install run`
-
-### Modifying the API definitions
-If you are editing the API definitions, generate the manifests such as CRs or CRDs using:
-
-```sh
-make manifests
-```
+> **NOTE:** The `anayak.com.np/port-bridge-service` label is used to identify the services that need to be exposed through the Port-Bridge.
 
 **NOTE:** Run `make --help` for more information on all potential `make` targets
 

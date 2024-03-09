@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	crdsv1 "github.com/abdheshnayak/port-bridge/api/v1"
-	"github.com/abdheshnayak/port-bridge/internal/controllers"
-	"github.com/abdheshnayak/port-bridge/internal/controllers/env"
+	"github.com/abdheshnayak/port-bridge/controllers"
+	"github.com/abdheshnayak/port-bridge/controllers/env"
 	"github.com/kloudlite/operator/pkg/logging"
 	//+kubebuilder:scaffold:imports
 )
