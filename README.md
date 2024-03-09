@@ -47,6 +47,5 @@ metadata:
 
 > **NOTE:** The `anayak.com.np/port-bridge-service` label is used to identify the services that need to be exposed through the Port-Bridge.
 
-**NOTE:** Run `make --help` for more information on all potential `make` targets
 
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+More information about the code structure and commands can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
