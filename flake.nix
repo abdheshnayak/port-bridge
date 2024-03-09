@@ -1,5 +1,5 @@
 {
-  description = "kloudlite operator development setup";
+  description = "portbridge operator development setup";
 
   inputs = {
     nixpkgs = {
